@@ -1,0 +1,6 @@
+# CODEOWNERS: who is asked to review changes to each part of the repository.
+# 1. Replace the @placeholders with your teammates' GitHub usernames.
+# 2. Remove the "# " at the start of each line you want to activate.
+# currenlty in branch protection we have not enabled codeowner will enable it in later part of project
+
+
