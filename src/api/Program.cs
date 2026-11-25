@@ -1,23 +1,83 @@
-// Entry point of the Building Operations API (ASP.NET Core, .NET 10).
-// Feature code goes in Modules/<ModuleName>; cross-cutting code goes in Shared/.
+using System.Text.Json.Serialization; 
 
-var builder = WebApplication.CreateBuilder(args);
+using Api.Modules.Buildings; 
 
-builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks();
+using Api.Modules.Identity; 
 
-var app = builder.Build();
+using Api.Shared.Auth; 
 
-if (app.Environment.IsDevelopment())
-{
-    // OpenAPI document at /openapi/v1.json (development only)
-    app.MapOpenApi();
-}
+using Api.Shared.Persistence; 
 
-// Used by containers, smoke tests and the runbook to check that the API is up.
-app.MapHealthChecks("/health");
+using Microsoft.EntityFrameworkCore; 
 
-app.MapGet("/api/v1/ping", () => Results.Ok(new { status = "ok" }))
-   .WithName("Ping");
+ 
 
-app.Run();
+var builder = WebApplication.CreateBuilder(args); 
+
+ 
+
+// ---- 1. Register services (dependency injection container) ---- 
+
+builder.Services.AddDbContext<AppDbContext>(o => 
+
+    o.UseNpgsql(builder.Configuration.GetConnectionString("Default"))); 
+
+builder.Services.AddBuildingOpsAuth(builder.Configuration); 
+
+builder.Services.AddValidation();                       // runs [Required], [Range]... automatically 
+
+builder.Services.AddProblemDetails();                   // standard error format 
+
+builder.Services.AddOpenApi(); 
+
+builder.Services.ConfigureHttpJsonOptions(o => 
+
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter())); // "Apartment" instead of 0 
+
+ 
+
+var app = builder.Build(); 
+
+ 
+
+// ---- 2. Middleware pipeline (order matters!) ---- 
+
+app.UseExceptionHandler(); 
+
+app.UseStatusCodePages(); 
+
+if (app.Environment.IsDevelopment()) 
+
+{ 
+
+    app.MapOpenApi().AllowAnonymous();                  // /openapi/v1.json (development only) 
+
+    await DemoData.SeedAsync(app.Services); 
+
+} 
+
+app.UseAuthentication();                                // who are you? 
+
+app.UseAuthorization();                                 // may you do this? 
+
+ 
+
+// ---- 3. Endpoints ---- 
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous(); 
+
+ 
+
+var api = app.MapGroup("/api/v1").RequireAuthorization(); 
+
+api.MapMeEndpoints(); 
+
+api.MapBuildingEndpoints(); 
+
+ 
+
+app.Run(); 
+
+ 
+
+public partial class Program { }           
